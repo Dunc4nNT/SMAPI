@@ -101,6 +101,7 @@
 
       BundleExtraAssemblies="$(BundleExtraAssemblies)"
       ContentPacks="@(ContentPacks)"
+      I18nFiles="@(I18nFiles)"
     />
   </Target>
 </Project>

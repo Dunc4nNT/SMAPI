@@ -66,6 +66,9 @@ public class DeployModTask : Task
     /// <summary>A list of content pack folders to bundle with the mod.</summary>
     public ITaskItem[] ContentPacks { get; set; }
 
+    /// <summary>A list of i18n files to bundle with the mod.</summary>
+    public ITaskItem[] I18nFiles { get; set; }
+
 
     /*********
     ** Public methods
@@ -105,9 +108,18 @@ public class DeployModTask : Task
             string[] ignoreFilePaths = this.GetCustomIgnoreFilePaths(this.IgnoreModFilePaths).ToArray();
             Regex[] ignoreFilePatterns = this.GetCustomIgnorePatterns(this.IgnoreModFilePatterns).ToArray();
 
+            List<string> i18nFilePaths = [];
+            if (this.I18nFiles != null)
+            {
+                i18nFilePaths.AddRange(
+                    from i18nFile in this.I18nFiles
+                    where !string.IsNullOrEmpty(i18nFile.ItemSpec)
+                    select i18nFile.ItemSpec);
+            }
+
             var modPackages = new Dictionary<string, IModFileManager>
             {
-                [this.ModFolderName] = new MainModFileManager(this.ProjectDir, this.TargetDir, ignoreFilePaths, ignoreFilePatterns, bundleAssemblyTypes, this.ModDllName, overrideManifestJson, validateRequiredModFiles: this.EnableModDeploy || this.EnableModZip)
+                [this.ModFolderName] = new MainModFileManager(this.ProjectDir, this.TargetDir, ignoreFilePaths, ignoreFilePatterns, bundleAssemblyTypes, this.ModDllName, overrideManifestJson, validateRequiredModFiles: this.EnableModDeploy || this.EnableModZip, i18nFilePaths.ToArray())
             };
 
             if (this.ContentPacks != null)

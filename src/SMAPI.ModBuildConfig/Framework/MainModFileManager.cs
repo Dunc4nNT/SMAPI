@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Microsoft.Build.Framework;
+using Microsoft.Build.Utilities;
 using StardewModdingAPI.Toolkit.Utilities;
 
 namespace StardewModdingAPI.ModBuildConfig.Framework;
@@ -69,7 +71,7 @@ internal class MainModFileManager : IModFileManager
     /// <param name="overrideManifestJson">If set, replace the mod's <samp>manifest.json</samp> file with this content.</param>
     /// <param name="validateRequiredModFiles">Whether to validate that required mod files like the manifest are present.</param>
     /// <exception cref="UserErrorException">The mod package isn't valid.</exception>
-    public MainModFileManager(string projectDir, string targetDir, string[] ignoreFilePaths, Regex[] ignoreFilePatterns, ExtraAssemblyTypes bundleAssemblyTypes, string modDllName, string overrideManifestJson, bool validateRequiredModFiles)
+    public MainModFileManager(string projectDir, string targetDir, string[] ignoreFilePaths, Regex[] ignoreFilePatterns, ExtraAssemblyTypes bundleAssemblyTypes, string modDllName, string overrideManifestJson, bool validateRequiredModFiles, string[] i18nFiles)
     {
         // validate paths
         if (!Directory.Exists(projectDir))
@@ -79,7 +81,7 @@ internal class MainModFileManager : IModFileManager
 
         // collect files
         BundleFile manifestEntry = null;
-        foreach (BundleFile entry in this.GetPossibleFiles(projectDir, targetDir, overrideManifestJson))
+        foreach (BundleFile entry in this.GetPossibleFiles(projectDir, targetDir, overrideManifestJson, i18nFiles))
         {
             if (!this.ShouldIgnore(entry.File, entry.RelativePath, ignoreFilePaths, ignoreFilePatterns, bundleAssemblyTypes, modDllName))
             {
@@ -119,7 +121,7 @@ internal class MainModFileManager : IModFileManager
     /// <param name="targetDir">The folder containing the build output.</param>
     /// <param name="overrideManifestJson">If set, replace the mod's <samp>manifest.json</samp> file with this content.</param>
     /// <returns>Returns tuples containing the relative path within the mod folder, and the file to copy to it.</returns>
-    private IEnumerable<BundleFile> GetPossibleFiles(string projectDir, string targetDir, string overrideManifestJson)
+    private IEnumerable<BundleFile> GetPossibleFiles(string projectDir, string targetDir, string overrideManifestJson, string[] i18nFiles)
     {
         // project manifest
         bool hasProjectManifest = false;
@@ -133,16 +135,31 @@ internal class MainModFileManager : IModFileManager
         }
 
         // project i18n files
-        bool hasProjectTranslations = false;
-        DirectoryInfo translationsFolder = new(Path.Combine(projectDir, "i18n"));
-        if (translationsFolder.Exists)
+        bool hasProjectTranslations = i18nFiles.Length > 0;
+        foreach (string i18nFile in i18nFiles)
         {
-            foreach (FileInfo file in translationsFolder.EnumerateFiles("*", SearchOption.AllDirectories))
+            if (!Path.GetExtension(i18nFile).Equals(".json", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            string translationsFolder = Path.Combine(projectDir, "i18n");
+            string fullPath = Path.GetFullPath(i18nFile);
+            string parentDirPath = Path.GetDirectoryName(fullPath);
+            string parentName = Path.GetFileName(parentDirPath);
+            string linkedPath = null;
+
+            if (parentName?.Equals("i18n", StringComparison.OrdinalIgnoreCase) is true)
+                linkedPath = Path.Combine(translationsFolder, Path.GetFileName(fullPath));
+            else
             {
-                string relativePath = PathUtilities.GetRelativePath(projectDir, file.FullName);
-                yield return new BundleFile(relativePath, file);
+                string grandparentDirPath = Path.GetDirectoryName(parentDirPath);
+                string grandparentName = Path.GetFileName(grandparentDirPath);
+
+                if (grandparentName?.Equals("i18n", StringComparison.OrdinalIgnoreCase) is true)
+                    linkedPath = Path.Combine(translationsFolder, parentName, Path.GetFileName(fullPath));
             }
-            hasProjectTranslations = true;
+
+            string relativePath = PathUtilities.GetRelativePath(projectDir, linkedPath ?? fullPath);
+            yield return new BundleFile(relativePath, new FileInfo(fullPath));
         }
 
         // project assets folder
